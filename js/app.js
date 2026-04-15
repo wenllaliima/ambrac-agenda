@@ -446,7 +446,7 @@ function processFile(file) {
       alert('Erro ao ler o arquivo:\n' + err.message);
     }
   };
-  reader.readAsText(file, 'UTF-8');
+  reader.readAsText(file, 'windows-1252');
 }
 
 // ---- CSV Parser ----
