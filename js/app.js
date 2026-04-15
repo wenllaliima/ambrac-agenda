@@ -443,17 +443,12 @@ function processFile(file) {
       const buffer = ev.target.result;
       const bytes  = new Uint8Array(buffer);
 
-      let text;
-      // UTF-8 BOM (EF BB BF) → forçar UTF-8
-      if (bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
-        text = new TextDecoder('UTF-8').decode(buffer);
-      } else {
-        // Tenta UTF-8; se aparecer caractere de substituição (U+FFFD), usa Windows-1252
-        const utf8 = new TextDecoder('UTF-8', { fatal: false }).decode(buffer);
-        text = utf8.includes('\uFFFD')
-          ? new TextDecoder('windows-1252').decode(buffer)
-          : utf8;
-      }
+      // Excel brasileiro salva CSV em Windows-1252 por padrão.
+      // Só usa UTF-8 se o arquivo tiver BOM (EF BB BF) — gerado pelo Excel moderno
+      // ao exportar com "CSV UTF-8 (com BOM)".
+      const hasUtf8Bom = bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF;
+      const encoding   = hasUtf8Bom ? 'UTF-8' : 'windows-1252';
+      const text       = new TextDecoder(encoding).decode(buffer);
 
       parsedRows = parseCSV(text);
       showPreview(parsedRows);
