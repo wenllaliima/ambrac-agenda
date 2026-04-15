@@ -62,6 +62,16 @@ function bindEvents() {
   document.getElementById('btnDelete').addEventListener('click', deleteRecord);
   document.getElementById('form').addEventListener('submit', saveRecord);
 
+  // Import
+  document.getElementById('btnImport').addEventListener('click', openImport);
+  document.getElementById('importClose').addEventListener('click', closeImport);
+  document.getElementById('importOverlay').addEventListener('click', closeImport);
+  document.getElementById('csvFile').addEventListener('change', onFileChosen);
+  document.getElementById('btnImportBack').addEventListener('click', importGoStep1);
+  document.getElementById('btnImportRun').addEventListener('click', runImport);
+  document.getElementById('btnImportClose').addEventListener('click', closeImport);
+  bindDropZone();
+
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') closeModal();
   });
@@ -370,5 +380,222 @@ async function deleteRecord() {
   }
 
   closeModal();
+  await loadDay(currentDate);
+}
+
+// ============================================================
+// IMPORT CSV
+// ============================================================
+
+let parsedRows = [];
+
+// ---- Open / Close ----
+function openImport() {
+  importGoStep1();
+  document.getElementById('importModal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeImport() {
+  document.getElementById('importModal').style.display = 'none';
+  document.body.style.overflow = '';
+  parsedRows = [];
+}
+
+function importGoStep1() {
+  document.getElementById('importStep1').style.display = 'block';
+  document.getElementById('importStep2').style.display = 'none';
+  document.getElementById('importStep3').style.display = 'none';
+  document.getElementById('csvFile').value = '';
+  parsedRows = [];
+}
+
+// ---- Drop zone ----
+function bindDropZone() {
+  const zone = document.getElementById('dropZone');
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) processFile(file);
+  });
+}
+
+function onFileChosen(e) {
+  const file = e.target.files[0];
+  if (file) processFile(file);
+}
+
+// ---- File processing ----
+function processFile(file) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      parsedRows = parseCSV(ev.target.result);
+      showPreview(parsedRows);
+    } catch (err) {
+      alert('Erro ao ler o arquivo:\n' + err.message);
+    }
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+// ---- CSV Parser ----
+function parseCSVLine(line) {
+  const cols = [];
+  let cur = '';
+  let inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') { inQ = !inQ; }
+    else if (ch === ';' && !inQ) { cols.push(cur.trim()); cur = ''; }
+    else { cur += ch; }
+  }
+  cols.push(cur.trim());
+  return cols;
+}
+
+function nullify(v) {
+  if (!v) return null;
+  const t = v.trim();
+  return t === '' || t === '-' ? null : t;
+}
+
+function parseCSV(text) {
+  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  const rows = [];
+  let dateCtx = null;
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+
+    // Date header: "AGENDAMENTO DIA 30/03/2026 - SEGUNDA-FEIRA"
+    if (/^AGENDAMENTO DIA/i.test(line)) {
+      const m = line.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+      if (m) dateCtx = `${m[3]}-${m[2]}-${m[1]}`;
+      continue;
+    }
+
+    const cols = parseCSVLine(line);
+
+    // Skip column header row
+    if (cols[0] && cols[0].toUpperCase() === 'ORDEM') continue;
+
+    // Skip rows without razao_social (col 5) or without date context
+    const razao = nullify(cols[5]);
+    if (!razao || !dateCtx) continue;
+
+    const grazi = (nullify(cols[13]) || '').toLowerCase() === 'sim';
+
+    rows.push({
+      data_visita:              dateCtx,
+      ordem:                    parseInt(nullify(cols[0])) || null,
+      categoria:                nullify(cols[1]),
+      classificacao:            parseInt(nullify(cols[2])) || null,
+      cnpj:                     nullify(cols[3]),
+      grupo:                    nullify(cols[4]),
+      razao_social:             razao,
+      unidade:                  nullify(cols[6]),
+      servicos_contrato:        nullify(cols[7]),
+      data_documentacao:        nullify(cols[8]),
+      visitas_feitas:           nullify(cols[9]),
+      psicossocial:             nullify(cols[10]),
+      status_documentacao:      nullify(cols[11]),
+      autor:                    nullify(cols[12]),
+      grazi,
+      responsavel_documentacao: nullify(cols[14]),
+      tipo_contrato:            nullify(cols[15]),
+      data_contrato:            nullify(cols[16]),
+      planilha_empresa:         nullify(cols[17]),
+      comercial_responsavel:    nullify(cols[18]),
+      ordem_servico_unisyst:    nullify(cols[19]),
+      visita:                   nullify(cols[20]),
+      cidade:                   nullify(cols[21]),
+      endereco:                 nullify(cols[22]),
+      email:                    nullify(cols[23]),
+      telefone:                 nullify(cols[24]),
+      uber:                     nullify(cols[25]),
+      data_pagamento:           nullify(cols[26]),
+      atualizado_em:            new Date().toISOString(),
+      atualizado_por:           'importação CSV',
+    });
+  }
+
+  return rows;
+}
+
+// ---- Preview ----
+function showPreview(rows) {
+  if (rows.length === 0) {
+    alert('Nenhum registro válido encontrado no arquivo. Verifique se o separador é ponto-e-vírgula (;).');
+    return;
+  }
+
+  const dias = new Set(rows.map(r => r.data_visita)).size;
+  document.getElementById('importSummary').innerHTML =
+    `<span>&#128202; <strong>${rows.length}</strong> registros encontrados</span>` +
+    `<span>&#128197; <strong>${dias}</strong> dias de agendamento</span>`;
+
+  const tbody = document.querySelector('#importPreview tbody');
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td>${r.data_visita ? r.data_visita.split('-').reverse().join('/') : ''}</td>
+      <td>${esc(r.ordem ?? '')}</td>
+      <td>${esc(r.categoria ?? '')}</td>
+      <td>${esc(r.razao_social)}</td>
+      <td>${esc(r.status_documentacao ?? '')}</td>
+      <td>${esc(r.cidade ?? '')}</td>
+      <td>${esc(r.autor ?? '')}</td>
+    </tr>
+  `).join('');
+
+  document.getElementById('importStep1').style.display = 'none';
+  document.getElementById('importStep2').style.display = 'block';
+  document.getElementById('importProgress').style.display = 'none';
+  document.getElementById('btnImportRun').disabled = false;
+  document.getElementById('btnImportRun').textContent = 'Importar tudo';
+}
+
+// ---- Run import ----
+async function runImport() {
+  if (!parsedRows.length) return;
+
+  const btn = document.getElementById('btnImportRun');
+  btn.disabled = true;
+  btn.textContent = 'Importando…';
+
+  const progress = document.getElementById('importProgress');
+  const fill     = document.getElementById('progressFill');
+  const label    = document.getElementById('progressLabel');
+  progress.style.display = 'block';
+
+  const BATCH = 50;
+  let inserted = 0;
+  let errors   = 0;
+
+  for (let i = 0; i < parsedRows.length; i += BATCH) {
+    const chunk = parsedRows.slice(i, i + BATCH);
+    const { error } = await sb.from('agendamentos').insert(chunk);
+    if (error) {
+      console.error('Import batch error:', error);
+      errors += chunk.length;
+    } else {
+      inserted += chunk.length;
+    }
+    const pct = Math.round(((i + chunk.length) / parsedRows.length) * 100);
+    fill.style.width  = pct + '%';
+    label.textContent = `Importando… ${inserted} de ${parsedRows.length}`;
+  }
+
+  document.getElementById('importStep2').style.display = 'none';
+  document.getElementById('importStep3').style.display = 'block';
+  document.getElementById('importDoneMsg').textContent =
+    errors === 0
+      ? `${inserted} registros importados com sucesso.`
+      : `${inserted} importados · ${errors} com erro (verifique o console).`;
+
   await loadDay(currentDate);
 }

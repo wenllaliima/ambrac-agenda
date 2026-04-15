@@ -25,6 +25,7 @@
       </div>
       <div class="header-actions">
         <span id="countBadge" class="count-badge"></span>
+        <button id="btnImport" class="btn-ghost">&#8679; Importar CSV</button>
         <button id="btnAdd" class="btn-primary">+ Nova Visita</button>
       </div>
     </div>
@@ -287,6 +288,67 @@
         </div>
 
       </form>
+    </div>
+  </div>
+
+  <!-- IMPORT MODAL -->
+  <div id="importModal" class="modal" style="display:none" role="dialog" aria-modal="true" aria-labelledby="importTitle">
+    <div class="modal-overlay" id="importOverlay"></div>
+    <div class="modal-box import-box">
+      <div class="modal-header">
+        <h2 id="importTitle">Importar CSV</h2>
+        <button id="importClose" class="modal-close" aria-label="Fechar">&#10005;</button>
+      </div>
+      <div class="import-body">
+
+        <!-- Step 1: pick file -->
+        <div id="importStep1">
+          <div id="dropZone" class="drop-zone">
+            <div class="drop-icon">&#8679;</div>
+            <p>Arraste o arquivo CSV aqui</p>
+            <p class="drop-sub">ou</p>
+            <label class="btn-primary" style="cursor:pointer; display:inline-block;">
+              Escolher arquivo
+              <input type="file" id="csvFile" accept=".csv,.txt" style="display:none">
+            </label>
+            <p class="drop-hint">Separador: ponto-e-vírgula &nbsp;·&nbsp; Formato da planilha ROTA</p>
+          </div>
+        </div>
+
+        <!-- Step 2: preview -->
+        <div id="importStep2" style="display:none">
+          <div id="importSummary" class="import-summary"></div>
+          <div class="import-preview-wrap">
+            <table id="importPreview" class="import-table">
+              <thead>
+                <tr>
+                  <th>Data</th><th>Ordem</th><th>Categoria</th>
+                  <th>Razão Social</th><th>Status</th><th>Cidade</th><th>Autor</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div id="importProgress" class="import-progress" style="display:none">
+            <div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
+            <span id="progressLabel">Importando…</span>
+          </div>
+          <div class="import-actions">
+            <button id="btnImportBack" class="btn-ghost">&#8592; Voltar</button>
+            <button id="btnImportRun"  class="btn-primary">Importar tudo</button>
+          </div>
+        </div>
+
+        <!-- Step 3: done -->
+        <div id="importStep3" style="display:none">
+          <div class="import-done">
+            <div class="done-icon">&#10003;</div>
+            <p id="importDoneMsg"></p>
+            <button id="btnImportClose" class="btn-primary">Fechar</button>
+          </div>
+        </div>
+
+      </div>
     </div>
   </div>
 
