@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AMBRAC – Agenda de Visitas</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header>
+    <div class="header-inner">
+      <div class="brand">
+        <span class="brand-main">AMBRAC</span>
+        <span class="brand-sub">Agenda de Visitas</span>
+      </div>
+      <div class="date-nav">
+        <button id="btnPrev" class="icon-btn" title="Dia anterior">&#8249;</button>
+        <div class="date-display">
+          <input type="date" id="datePicker">
+          <span id="dayLabel"></span>
+        </div>
+        <button id="btnNext" class="icon-btn" title="Próximo dia">&#8250;</button>
+      </div>
+      <div class="header-actions">
+        <span id="countBadge" class="count-badge"></span>
+        <button id="btnAdd" class="btn-primary">+ Nova Visita</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- FILTERS -->
+  <div class="filters-bar">
+    <select id="filtStatus">
+      <option value="">Todos os status</option>
+      <option>NOVA EMPRESA</option>
+      <option>VENCIDA</option>
+      <option>ENVIADO</option>
+      <option>VÁLIDA</option>
+      <option>ANDAMENTO</option>
+      <option>MIGRAÇÃO DE CNPJ</option>
+      <option>NÃO ENVIAR</option>
+      <option>DESMARCADO</option>
+    </select>
+    <select id="filtCategoria">
+      <option value="">Todas as categorias</option>
+      <option>ADMINISTRATIVO</option>
+      <option>OPERACIONAL</option>
+      <option>SAÚDE</option>
+      <option>RESTAURANTE</option>
+      <option>CONDOMINIO</option>
+      <option>OUTROS</option>
+      <option>MERCADO</option>
+      <option>ESCOLA</option>
+      <option>ACADEMIA</option>
+    </select>
+    <select id="filtAutor">
+      <option value="">Todos os autores</option>
+    </select>
+    <input type="text" id="filtSearch" placeholder="Buscar empresa, CNPJ, cidade…">
+    <button id="btnClearFilters" class="btn-ghost">&#10005; Limpar</button>
+    <span id="uberTotal" class="uber-total"></span>
+  </div>
+
+  <!-- MAIN -->
+  <main id="main">
+    <div id="loading" class="state-msg">Carregando…</div>
+    <div id="empty"   class="state-msg" style="display:none">Nenhum agendamento para este dia.</div>
+    <div id="cards"   class="cards-grid" style="display:none"></div>
+  </main>
+
+  <!-- MODAL -->
+  <div id="modal" class="modal" style="display:none" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-overlay" id="modalOverlay"></div>
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2 id="modalTitle">Nova Visita</h2>
+        <button id="modalClose" class="modal-close" aria-label="Fechar">&#10005;</button>
+      </div>
+      <form id="form" class="modal-form" autocomplete="off" novalidate>
+
+        <fieldset>
+          <legend>Agendamento</legend>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Data da Visita *</label>
+              <input type="date" name="data_visita" required>
+            </div>
+            <div class="form-group sm">
+              <label>Ordem</label>
+              <input type="number" name="ordem" min="1">
+            </div>
+            <div class="form-group sm">
+              <label>Classificação</label>
+              <input type="number" name="classificacao" min="1" max="5">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Categoria</label>
+              <select name="categoria">
+                <option value="">—</option>
+                <option>ADMINISTRATIVO</option>
+                <option>OPERACIONAL</option>
+                <option>SAÚDE</option>
+                <option>RESTAURANTE</option>
+                <option>CONDOMINIO</option>
+                <option>OUTROS</option>
+                <option>MERCADO</option>
+                <option>ESCOLA</option>
+                <option>ACADEMIA</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Status da Documentação</label>
+              <select name="status_documentacao">
+                <option value="">—</option>
+                <option>NOVA EMPRESA</option>
+                <option>VENCIDA</option>
+                <option>ENVIADO</option>
+                <option>VÁLIDA</option>
+                <option>ANDAMENTO</option>
+                <option>MIGRAÇÃO DE CNPJ</option>
+                <option>NÃO ENVIAR</option>
+                <option>DESMARCADO</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Autor</label>
+              <input type="text" name="autor">
+            </div>
+            <div class="form-group">
+              <label>Responsável pela Documentação</label>
+              <input type="text" name="responsavel_documentacao">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group checkbox-group">
+              <label><input type="checkbox" name="grazi"> Grazi</label>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Empresa</legend>
+          <div class="form-row">
+            <div class="form-group">
+              <label>CNPJ</label>
+              <input type="text" name="cnpj">
+            </div>
+            <div class="form-group">
+              <label>Grupo</label>
+              <input type="text" name="grupo">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group full">
+              <label>Razão Social *</label>
+              <input type="text" name="razao_social" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group full">
+              <label>Unidade</label>
+              <input type="text" name="unidade">
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Contrato</legend>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Tipo de Contrato</label>
+              <select name="tipo_contrato">
+                <option value="">—</option>
+                <option>MENSALISTA</option>
+                <option>AVULSO</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Data do Contrato</label>
+              <input type="text" name="data_contrato" placeholder="DD/MM/AAAA">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group full">
+              <label>Serviços em Contrato</label>
+              <input type="text" name="servicos_contrato">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Planilha da Empresa</label>
+              <input type="text" name="planilha_empresa">
+            </div>
+            <div class="form-group">
+              <label>Comercial Responsável</label>
+              <input type="text" name="comercial_responsavel">
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Documentação</legend>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Data da Documentação</label>
+              <input type="text" name="data_documentacao" placeholder="DD/MM/AAAA">
+            </div>
+            <div class="form-group">
+              <label>Visitas Feitas</label>
+              <input type="text" name="visitas_feitas" placeholder="OK, NÃO FOI FEITA…">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Psicossocial</label>
+              <input type="text" name="psicossocial">
+            </div>
+            <div class="form-group">
+              <label>OS Aberta no Unisyst</label>
+              <input type="text" name="ordem_servico_unisyst">
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Contato e Localização</legend>
+          <div class="form-row">
+            <div class="form-group full">
+              <label>Informações da Visita (contato, horário)</label>
+              <textarea name="visita" rows="2" placeholder="Nome – 61 9xxxx-xxxx – horário"></textarea>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Cidade</label>
+              <input type="text" name="cidade">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group full">
+              <label>Endereço</label>
+              <input type="text" name="endereco">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>E-mail</label>
+              <input type="text" name="email">
+            </div>
+            <div class="form-group">
+              <label>Telefone</label>
+              <input type="text" name="telefone">
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Financeiro</legend>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Uber</label>
+              <input type="text" name="uber" placeholder="R$ 0,00 ou NÃO FOI FEITO">
+            </div>
+            <div class="form-group">
+              <label>Data de Pagamento</label>
+              <input type="text" name="data_pagamento">
+            </div>
+          </div>
+        </fieldset>
+
+        <div class="form-footer">
+          <div class="form-group">
+            <label>Atualizado por</label>
+            <input type="text" name="atualizado_por" placeholder="Seu nome">
+          </div>
+          <div class="form-actions">
+            <button type="button" id="btnDelete" class="btn-danger" style="display:none">Excluir</button>
+            <button type="button" id="btnCancel" class="btn-ghost">Cancelar</button>
+            <button type="submit" id="btnSave" class="btn-primary">Salvar</button>
+          </div>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
