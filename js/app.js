@@ -440,13 +440,28 @@ function processFile(file) {
   const reader = new FileReader();
   reader.onload = ev => {
     try {
-      parsedRows = parseCSV(ev.target.result);
+      const buffer = ev.target.result;
+      const bytes  = new Uint8Array(buffer);
+
+      let text;
+      // UTF-8 BOM (EF BB BF) → forçar UTF-8
+      if (bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+        text = new TextDecoder('UTF-8').decode(buffer);
+      } else {
+        // Tenta UTF-8; se aparecer caractere de substituição (U+FFFD), usa Windows-1252
+        const utf8 = new TextDecoder('UTF-8', { fatal: false }).decode(buffer);
+        text = utf8.includes('\uFFFD')
+          ? new TextDecoder('windows-1252').decode(buffer)
+          : utf8;
+      }
+
+      parsedRows = parseCSV(text);
       showPreview(parsedRows);
     } catch (err) {
       alert('Erro ao ler o arquivo:\n' + err.message);
     }
   };
-  reader.readAsText(file, 'windows-1252');
+  reader.readAsArrayBuffer(file);
 }
 
 // ---- CSV Parser ----
