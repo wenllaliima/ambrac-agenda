@@ -9,9 +9,10 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ---- State ----
-let currentDate = todayISO();
-let allRecords  = [];
-let editingId   = null;
+let currentDate   = todayISO();
+let allRecords    = [];
+let editingId     = null;
+let pendentesMode = false;
 
 // ---- Bootstrap ----
 document.addEventListener('DOMContentLoaded', () => {
@@ -52,7 +53,13 @@ function bindEvents() {
   document.getElementById('datePicker').addEventListener('change', e => {
     currentDate = e.target.value;
     updateDayLabel();
+    setPendentesMode(false);
     loadDay(currentDate);
+  });
+
+  document.getElementById('btnPendentes').addEventListener('click', () => {
+    setPendentesMode(!pendentesMode);
+    if (pendentesMode) loadPendentes(); else loadDay(currentDate);
   });
 
   document.getElementById('btnAdd').addEventListener('click', () => openModal(null));
@@ -72,6 +79,24 @@ function bindEvents() {
   document.getElementById('btnImportClose').addEventListener('click', closeImport);
   bindDropZone();
 
+  document.getElementById('fillFile').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const bytes = new Uint8Array(ev.target.result);
+        const hasBom = bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF;
+        const text = new TextDecoder(hasBom ? 'UTF-8' : 'windows-1252').decode(ev.target.result);
+        fillFormFromCSV(text);
+      } catch (err) {
+        showFillFeedback('Erro ao ler arquivo', true);
+      }
+      e.target.value = '';
+    };
+    reader.readAsArrayBuffer(file);
+  });
+
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') closeModal();
   });
@@ -88,10 +113,45 @@ function shiftDay(n) {
   currentDate = d.toISOString().split('T')[0];
   document.getElementById('datePicker').value = currentDate;
   updateDayLabel();
+  setPendentesMode(false);
   loadDay(currentDate);
 }
 
+function setPendentesMode(on) {
+  pendentesMode = on;
+  const btn = document.getElementById('btnPendentes');
+  const nav = document.getElementById('dateNav');
+  btn.classList.toggle('btn-active', on);
+  if (nav) nav.style.opacity = on ? '.4' : '';
+  document.getElementById('empty').textContent = on
+    ? 'Nenhuma empresa pendente de agendamento.'
+    : 'Nenhum agendamento para este dia.';
+}
+
 // ---- Data ----
+async function loadPendentes() {
+  showLoading(true);
+
+  const { data, error } = await sb
+    .from('agendamentos')
+    .select('*')
+    .is('data_visita', null)
+    .order('razao_social');
+
+  showLoading(false);
+
+  if (error) {
+    console.error('Supabase error:', error);
+    document.getElementById('empty').textContent = 'Erro ao carregar dados.';
+    document.getElementById('empty').style.display = 'block';
+    return;
+  }
+
+  allRecords = data || [];
+  populateAutorFilter();
+  renderCards();
+}
+
 async function loadDay(date) {
   showLoading(true);
 
@@ -231,9 +291,14 @@ function cardHTML(r) {
   const sc = statusClass(r.status_documentacao);
   const vc = visitaClass(r.visitas_feitas);
 
+  const contratoClass = !r.tipo_contrato ? ''
+    : r.tipo_contrato.toUpperCase().includes('MENSAL') ? 'badge-mensal'
+    : 'badge-avulso';
+
   const topBadges = [
     r.ordem    ? `<span class="badge badge-ordem">#${esc(r.ordem)}</span>` : '',
     r.categoria ? `<span class="badge badge-cat">${esc(r.categoria)}</span>` : '',
+    r.tipo_contrato ? `<span class="badge ${contratoClass}">${esc(r.tipo_contrato)}</span>` : '',
   ].filter(Boolean).join('');
 
   const statusBadge = r.status_documentacao
@@ -290,10 +355,12 @@ function openModal(id) {
     deleteBtn.style.display = 'inline-block';
     populateForm(r);
   } else {
-    document.getElementById('modalTitle').textContent = 'Nova Visita';
+    document.getElementById('modalTitle').textContent = 'Nova Empresa';
     deleteBtn.style.display = 'none';
     form.reset();
-    form.querySelector('[name="data_visita"]').value = currentDate;
+    if (!pendentesMode) {
+      form.querySelector('[name="data_visita"]').value = currentDate;
+    }
   }
 
   document.getElementById('modal').style.display = 'flex';
@@ -370,24 +437,28 @@ async function saveRecord(e) {
   }
 
   closeModal();
-  await loadDay(currentDate);
+  if (pendentesMode) await loadPendentes(); else await loadDay(currentDate);
 }
 
-// ---- Delete ----
+// ---- Delete (soft) ----
 async function deleteRecord() {
   if (!editingId) return;
   const r = allRecords.find(x => x.id === editingId);
-  const nome = r ? r.razao_social : 'este agendamento';
-  if (!confirm(`Excluir "${nome}"? Esta ação não pode ser desfeita.`)) return;
+  const nome = r ? r.razao_social : 'este registro';
+  if (!confirm(`Arquivar "${nome}"?\nO registro ficará oculto mas não será apagado permanentemente.`)) return;
 
-  const { error } = await sb.from('agendamentos').delete().eq('id', editingId);
+  const { error } = await sb
+    .from('agendamentos')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', editingId);
+
   if (error) {
-    alert('Erro ao excluir:\n' + error.message);
+    alert('Erro ao arquivar:\n' + error.message);
     return;
   }
 
   closeModal();
-  await loadDay(currentDate);
+  if (pendentesMode) await loadPendentes(); else await loadDay(currentDate);
 }
 
 // ============================================================
@@ -615,4 +686,79 @@ async function runImport() {
       : `${inserted} importados · ${errors} com erro (verifique o console).`;
 
   await loadDay(currentDate);
+}
+
+// ============================================================
+// FILL FORM FROM CSV (Nova Visita)
+// ============================================================
+
+const FILL_COL_MAP = {
+  'ORDEM':                        'ordem',
+  'CATEGORIA':                    'categoria',
+  'CLASSIFICAÇÃO':                'classificacao',
+  'CNPJ':                         'cnpj',
+  'GRUPO':                        'grupo',
+  'RAZÃO SOCIAL':                 'razao_social',
+  'UNIDADE':                      'unidade',
+  'SERVIÇOS EM CONTRATO':         'servicos_contrato',
+  'DATA DA DOCUMENTAÇÃO':         'data_documentacao',
+  'PSICOSSOCIAL':                 'psicossocial',
+  'STATUS DA DOCUMENTAÇÃO':       'status_documentacao',
+  'AUTOR':                        'autor',
+  'GRAZI':                        'grazi',
+  'RESPONSÁVEL PELA DOCUMENTAÇÃO':'responsavel_documentacao',
+  'TIPO DE CONTRATO':             'tipo_contrato',
+  'DATA DO CONTRATO':             'data_contrato',
+  'PLANILHA DA EMPRESA':          'planilha_empresa',
+  'VISITAS':                      'visitas_feitas',
+  'COMERCIAL RESPONSÁVEL':        'comercial_responsavel',
+  'O.S ABERTA UNISYST':           'ordem_servico_unisyst',
+  'CIDADE':                       'cidade',
+  'ENDEREÇO':                     'endereco',
+  'TELEFONE':                     'telefone',
+  'E-MAIL':                       'email',
+};
+
+function fillFormFromCSV(text) {
+  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(l => l.trim());
+  if (lines.length < 2) {
+    showFillFeedback('Arquivo precisa ter cabeçalho e ao menos uma linha de dados', true);
+    return;
+  }
+
+  const headers = parseCSVLine(lines[0]).map(h => h.trim().toUpperCase());
+  const values  = parseCSVLine(lines[1]);
+
+  const form = document.getElementById('form');
+  let filled = 0;
+
+  headers.forEach((h, i) => {
+    const field = FILL_COL_MAP[h];
+    if (!field) return;
+    const val = (values[i] || '').trim();
+    if (!val || val === '-') return;
+
+    const el = form.elements[field];
+    if (!el) return;
+
+    if (el.type === 'checkbox') {
+      el.checked = val.toLowerCase() === 'sim';
+    } else {
+      el.value = val;
+    }
+    filled++;
+  });
+
+  if (filled === 0) {
+    showFillFeedback('Nenhum campo reconhecido. Verifique o modelo.', true);
+  } else {
+    showFillFeedback(`${filled} campos preenchidos`, false);
+  }
+}
+
+function showFillFeedback(msg, isError) {
+  const el = document.getElementById('fillFeedback');
+  el.textContent = msg;
+  el.className = 'fill-feedback' + (isError ? ' err' : '');
+  setTimeout(() => { el.textContent = ''; el.className = 'fill-feedback'; }, 4000);
 }

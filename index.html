@@ -25,8 +25,9 @@
       </div>
       <div class="header-actions">
         <span id="countBadge" class="count-badge"></span>
+        <button id="btnPendentes" class="btn-ghost">&#9676; Pendentes</button>
         <button id="btnImport" class="btn-ghost">&#8679; Importar CSV</button>
-        <button id="btnAdd" class="btn-primary">+ Nova Visita</button>
+        <button id="btnAdd" class="btn-primary">+ Nova Empresa</button>
       </div>
     </div>
   </header>
@@ -81,12 +82,21 @@
       </div>
       <form id="form" class="modal-form" autocomplete="off" novalidate>
 
+        <div class="fill-by-csv">
+          <label class="fill-csv-label btn-ghost" title="Preenche os campos com dados da planilha">
+            &#8679; Preencher por planilha
+            <input type="file" id="fillFile" accept=".csv,.txt" style="display:none">
+          </label>
+          <a href="modelo_visita.csv" download class="btn-ghost">&#8681; Baixar modelo</a>
+          <span id="fillFeedback" class="fill-feedback"></span>
+        </div>
+
         <fieldset>
           <legend>Agendamento</legend>
           <div class="form-row">
             <div class="form-group">
-              <label>Data da Visita *</label>
-              <input type="date" name="data_visita" required>
+              <label>Data da Visita</label>
+              <input type="date" name="data_visita">
             </div>
             <div class="form-group sm">
               <label>Ordem</label>
@@ -281,7 +291,7 @@
             <input type="text" name="atualizado_por" placeholder="Seu nome">
           </div>
           <div class="form-actions">
-            <button type="button" id="btnDelete" class="btn-danger" style="display:none">Excluir</button>
+            <button type="button" id="btnDelete" class="btn-danger" style="display:none">Arquivar</button>
             <button type="button" id="btnCancel" class="btn-ghost">Cancelar</button>
             <button type="submit" id="btnSave" class="btn-primary">Salvar</button>
           </div>
