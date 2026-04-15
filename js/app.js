@@ -240,12 +240,18 @@ function cardHTML(r) {
     ? `<span class="badge status-badge ${sc}">${esc(r.status_documentacao)}</span>`
     : '';
 
+  const psicClass = !r.psicossocial        ? 'psico-pendente'
+                  : r.psicossocial.toUpperCase().includes('ENVIADO') ? 'psico-enviado'
+                  : 'psico-outro';
+  const psicLabel = r.psicossocial ? `Psicossocial: ${r.psicossocial}` : 'Psicossocial: pendente';
+
   const infoRows = [
     r.cidade     ? `<span class="card-info-row"><span class="card-icon">&#128205;</span>${esc(r.cidade)}</span>` : '',
     r.visita     ? `<span class="card-info-row"><span class="card-icon">&#128222;</span>${esc(r.visita)}</span>` : '',
     r.visitas_feitas
       ? `<span class="card-info-row ${vc}"><span class="card-icon">&#10003;</span>${esc(r.visitas_feitas)}</span>`
       : '',
+    `<span class="card-info-row ${psicClass}"><span class="card-icon">&#129504;</span>${esc(psicLabel)}</span>`,
   ].filter(Boolean).join('');
 
   const graziTag = r.grazi ? '<span class="card-grazi">Grazi</span>' : '';

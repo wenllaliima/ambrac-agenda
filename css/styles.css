@@ -283,6 +283,10 @@ main {
 .visita-ok  { color: #86efac; }
 .visita-nao { color: #fca5a5; }
 
+.psico-enviado  { color: #86efac; }
+.psico-pendente { color: #fcd34d; }
+.psico-outro    { color: #93c5fd; }
+
 /* Card footer */
 .card-footer {
   margin-top: .75rem;
