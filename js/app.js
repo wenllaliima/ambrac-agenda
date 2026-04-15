@@ -248,6 +248,7 @@ function cardHTML(r) {
   const infoRows = [
     r.cidade     ? `<span class="card-info-row"><span class="card-icon">&#128205;</span>${esc(r.cidade)}</span>` : '',
     r.visita     ? `<span class="card-info-row"><span class="card-icon">&#128222;</span>${esc(r.visita)}</span>` : '',
+    r.email      ? `<span class="card-info-row"><span class="card-icon">&#9993;</span>${esc(r.email)}</span>` : '',
     r.visitas_feitas
       ? `<span class="card-info-row ${vc}"><span class="card-icon">&#10003;</span>${esc(r.visitas_feitas)}</span>`
       : '',
