@@ -721,20 +721,37 @@ async function runImport() {
   const label    = document.getElementById('progressLabel');
   progress.style.display = 'block';
 
-  // Apaga registros existentes para as datas do arquivo antes de inserir
+  // 1. Apagar TODOS os registros das datas presentes no arquivo
   const dates = [...new Set(parsedRows.map(r => r.data_visita).filter(Boolean))];
-  label.textContent = 'Removendo registros anteriores…';
+  label.textContent = `Limpando ${dates.length} dia(s)…`;
+
   for (const date of dates) {
-    const { error } = await sb.from('agendamentos').delete().eq('data_visita', date);
-    if (error) {
-      console.error('Delete error for date', date, error);
-      alert('Erro ao limpar dados anteriores:\n' + error.message);
-      btn.disabled = false;
-      btn.textContent = 'Importar tudo';
-      return;
+    // Primeiro busca os IDs para garantir que o delete vai atingir as linhas
+    const { data: existing, error: fetchErr } = await sb
+      .from('agendamentos')
+      .select('id')
+      .eq('data_visita', date);
+
+    if (fetchErr) {
+      alert('Erro ao verificar registros existentes:\n' + fetchErr.message);
+      btn.disabled = false; btn.textContent = 'Importar tudo'; return;
+    }
+
+    if (existing && existing.length > 0) {
+      const ids = existing.map(r => r.id);
+      const { error: delErr } = await sb
+        .from('agendamentos')
+        .delete()
+        .in('id', ids);
+
+      if (delErr) {
+        alert(`Erro ao apagar registros de ${date}:\n` + delErr.message);
+        btn.disabled = false; btn.textContent = 'Importar tudo'; return;
+      }
     }
   }
 
+  // 2. Inserir os novos registros
   const BATCH = 50;
   let inserted = 0;
   let errors   = 0;
@@ -744,6 +761,7 @@ async function runImport() {
     const { error } = await sb.from('agendamentos').insert(chunk);
     if (error) {
       console.error('Import batch error:', error);
+      alert('Erro ao inserir registros:\n' + error.message);
       errors += chunk.length;
     } else {
       inserted += chunk.length;
