@@ -431,37 +431,33 @@ function parseCSV(text) {
     if (cols[0] && cols[0].toUpperCase() === 'ORDEM') continue;
     const razao = nullify(cols[5]);
     if (!razao || !dateCtx) continue;
+    // Colunas da planilha ROTA:
+    // 0:ORDEM 1:CATEGORIA 2:CLASSIFICAÇÃO 3:CNPJ 4:GRUPO 5:RAZÃO SOCIAL
+    // 6:UNIDADE 7:SERVIÇOS 8:DATA DOC 9:VISITAS FEITAS 10:PSICOSSOCIAL
+    // 11:STATUS 12:VISITA(contato) 13:CIDADE 14:ENDEREÇO 15:E-MAIL 16:TELEFONE 17:UBER
     rows.push({
-      data_visita:              dateCtx,
-      ordem:                    parseInt(nullify(cols[0]))  || null,
-      categoria:                nullify(cols[1]),
-      classificacao:            parseInt(nullify(cols[2]))  || null,
-      cnpj:                     nullify(cols[3]),
-      grupo:                    nullify(cols[4]),
-      razao_social:             razao,
-      unidade:                  nullify(cols[6]),
-      servicos_contrato:        nullify(cols[7]),
-      data_documentacao:        nullify(cols[8]),
-      visitas_feitas:           nullify(cols[9]),
-      psicossocial:             nullify(cols[10]),
-      status_documentacao:      nullify(cols[11]),
-      autor:                    nullify(cols[12]),
-      grazi:                    (nullify(cols[13]) || '').toLowerCase() === 'sim',
-      responsavel_documentacao: nullify(cols[14]),
-      tipo_contrato:            nullify(cols[15]),
-      data_contrato:            nullify(cols[16]),
-      planilha_empresa:         nullify(cols[17]),
-      comercial_responsavel:    nullify(cols[18]),
-      ordem_servico_unisyst:    nullify(cols[19]),
-      visita:                   nullify(cols[20]),
-      cidade:                   nullify(cols[21]),
-      endereco:                 nullify(cols[22]),
-      email:                    nullify(cols[23]),
-      telefone:                 nullify(cols[24]),
-      uber:                     nullify(cols[25]),
-      data_pagamento:           nullify(cols[26]),
-      atualizado_em:            new Date().toISOString(),
-      atualizado_por:           'importação CSV',
+      data_visita:         dateCtx,
+      ordem:               parseInt(nullify(cols[0]))  || null,
+      categoria:           nullify(cols[1]),
+      classificacao:       parseInt(nullify(cols[2]))  || null,
+      cnpj:                nullify(cols[3]),
+      grupo:               nullify(cols[4]),
+      razao_social:        razao,
+      unidade:             nullify(cols[6]),
+      servicos_contrato:   nullify(cols[7]),
+      data_documentacao:   nullify(cols[8]),
+      visitas_feitas:      nullify(cols[9]),
+      psicossocial:        nullify(cols[10]),
+      status_documentacao: nullify(cols[11]),
+      visita:              nullify(cols[12]),
+      cidade:              nullify(cols[13]),
+      endereco:            nullify(cols[14]),
+      email:               nullify(cols[15]),
+      telefone:            nullify(cols[16]),
+      uber:                nullify(cols[17]),
+      grazi:               false,
+      atualizado_em:       new Date().toISOString(),
+      atualizado_por:      'importação CSV',
     });
   }
   return rows;
