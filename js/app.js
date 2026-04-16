@@ -13,6 +13,7 @@ let currentDate   = todayISO();
 let allRecords    = [];
 let editingId     = null;
 let pendentesMode = false;
+let todasMode     = false;
 
 // ---- Bootstrap ----
 document.addEventListener('DOMContentLoaded', () => {
@@ -54,12 +55,22 @@ function bindEvents() {
     currentDate = e.target.value;
     updateDayLabel();
     setPendentesMode(false);
+    setTodasMode(false);
     loadDay(currentDate);
   });
 
   document.getElementById('btnPendentes').addEventListener('click', () => {
-    setPendentesMode(!pendentesMode);
+    const on = !pendentesMode;
+    setTodasMode(false);
+    setPendentesMode(on);
     if (pendentesMode) loadPendentes(); else loadDay(currentDate);
+  });
+
+  document.getElementById('btnTodas').addEventListener('click', () => {
+    const on = !todasMode;
+    setPendentesMode(false);
+    setTodasMode(on);
+    if (todasMode) loadAll(); else loadDay(currentDate);
   });
 
   document.getElementById('btnAdd').addEventListener('click', () => openModal(null));
@@ -114,6 +125,7 @@ function shiftDay(n) {
   document.getElementById('datePicker').value = currentDate;
   updateDayLabel();
   setPendentesMode(false);
+  setTodasMode(false);
   loadDay(currentDate);
 }
 
@@ -123,9 +135,43 @@ function setPendentesMode(on) {
   const nav = document.getElementById('dateNav');
   btn.classList.toggle('btn-active', on);
   if (nav) nav.style.opacity = on ? '.4' : '';
+  if (!on && !todasMode) {
+    document.getElementById('empty').textContent = 'Nenhum agendamento para este dia.';
+  }
+}
+
+function setTodasMode(on) {
+  todasMode = on;
+  const btn = document.getElementById('btnTodas');
+  const nav = document.getElementById('dateNav');
+  btn.classList.toggle('btn-active', on);
+  if (nav) nav.style.opacity = on ? '.4' : '';
   document.getElementById('empty').textContent = on
-    ? 'Nenhuma empresa pendente de agendamento.'
+    ? 'Nenhuma empresa encontrada.'
     : 'Nenhum agendamento para este dia.';
+}
+
+async function loadAll() {
+  showLoading(true);
+
+  const { data, error } = await sb
+    .from('agendamentos')
+    .select('*')
+    .order('data_visita', { ascending: true })
+    .order('ordem', { nullsFirst: false });
+
+  showLoading(false);
+
+  if (error) {
+    console.error('Supabase error:', error);
+    document.getElementById('empty').textContent = 'Erro ao carregar dados.';
+    document.getElementById('empty').style.display = 'block';
+    return;
+  }
+
+  allRecords = data || [];
+  populateAutorFilter();
+  renderCards();
 }
 
 // ---- Data ----
@@ -310,19 +356,30 @@ function cardHTML(r) {
                   : 'psico-outro';
   const psicLabel = r.psicossocial ? `Psicossocial: ${r.psicossocial}` : 'Psicossocial: pendente';
 
+  // E-mail: múltiplos endereços → mostra o primeiro + "+N"
+  let emailRow = '';
+  if (r.email) {
+    const emails = r.email.split(/[,;]/).map(e => e.trim()).filter(Boolean);
+    const firstEmail = esc(emails[0]);
+    const moreTag = emails.length > 1
+      ? ` <span class="card-email-more">+${emails.length - 1}</span>`
+      : '';
+    emailRow = `<span class="card-info-row"><span class="card-icon">&#9993;</span><span class="card-email-text">${firstEmail}</span>${moreTag}</span>`;
+  }
+
   const infoRows = [
-    r.cidade     ? `<span class="card-info-row"><span class="card-icon">&#128205;</span>${esc(r.cidade)}</span>` : '',
-    r.visita     ? `<span class="card-info-row"><span class="card-icon">&#128222;</span>${esc(r.visita)}</span>` : '',
-    r.email      ? `<span class="card-info-row"><span class="card-icon">&#9993;</span>${esc(r.email)}</span>` : '',
+    r.cidade     ? `<span class="card-info-row"><span class="card-icon">&#128205;</span><span class="card-info-text">${esc(r.cidade)}</span></span>` : '',
+    r.visita     ? `<span class="card-info-row"><span class="card-icon">&#128222;</span><span class="card-info-text">${esc(r.visita)}</span></span>` : '',
+    emailRow,
     r.visitas_feitas
-      ? `<span class="card-info-row ${vc}"><span class="card-icon">&#10003;</span>${esc(r.visitas_feitas)}</span>`
+      ? `<span class="card-info-row ${vc}"><span class="card-icon">&#10003;</span><span class="card-info-text">${esc(r.visitas_feitas)}</span></span>`
       : '',
-    `<span class="card-info-row ${psicClass}"><span class="card-icon">&#129504;</span>${esc(psicLabel)}</span>`,
+    `<span class="card-info-row ${psicClass}"><span class="card-icon">&#129504;</span><span class="card-info-text">${esc(psicLabel)}</span></span>`,
   ].filter(Boolean).join('');
 
   const graziTag = r.grazi ? '<span class="card-grazi">Grazi</span>' : '';
   const uberTag  = r.uber && r.uber.trim()
-    ? `<span class="card-uber">${esc(r.uber.trim())}</span>`
+    ? `<span class="card-uber">${esc(r.uber.trim())}${r.data_pagamento ? ` · Pago: ${esc(r.data_pagamento)}` : ''}</span>`
     : '';
 
   return `
@@ -659,6 +716,20 @@ async function runImport() {
   const fill     = document.getElementById('progressFill');
   const label    = document.getElementById('progressLabel');
   progress.style.display = 'block';
+
+  // Apaga registros existentes para as datas do arquivo antes de inserir
+  const dates = [...new Set(parsedRows.map(r => r.data_visita).filter(Boolean))];
+  label.textContent = 'Removendo registros anteriores…';
+  for (const date of dates) {
+    const { error } = await sb.from('agendamentos').delete().eq('data_visita', date);
+    if (error) {
+      console.error('Delete error for date', date, error);
+      alert('Erro ao limpar dados anteriores:\n' + error.message);
+      btn.disabled = false;
+      btn.textContent = 'Importar tudo';
+      return;
+    }
+  }
 
   const BATCH = 50;
   let inserted = 0;
