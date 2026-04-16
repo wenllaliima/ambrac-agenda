@@ -324,26 +324,17 @@ function statusClass(s) {
   return 's-DEFAULT';
 }
 
-function visitaClass(v) {
-  if (!v) return '';
-  const u = v.toUpperCase();
-  if (u === 'OK') return 'visita-ok';
-  if (u.includes('NÃO') || u.includes('NAO') || u.includes('DESMARC')) return 'visita-nao';
-  return '';
-}
-
 // ---- Card HTML ----
 function cardHTML(r) {
   const sc = statusClass(r.status_documentacao);
-  const vc = visitaClass(r.visitas_feitas);
 
-  const contratoClass = !r.tipo_contrato ? ''
+  // Contrato badge
+  const contratoClass = !r.tipo_contrato ? 'badge-default'
     : r.tipo_contrato.toUpperCase().includes('MENSAL') ? 'badge-mensal'
     : 'badge-avulso';
 
-  const topBadges = [
-    r.ordem    ? `<span class="badge badge-ordem">#${esc(r.ordem)}</span>` : '',
-    r.categoria ? `<span class="badge badge-cat">${esc(r.categoria)}</span>` : '',
+  const topLeft = [
+    r.ordem ? `<span class="badge badge-ordem">#${esc(r.ordem)}</span>` : '',
     r.tipo_contrato ? `<span class="badge ${contratoClass}">${esc(r.tipo_contrato)}</span>` : '',
   ].filter(Boolean).join('');
 
@@ -351,46 +342,59 @@ function cardHTML(r) {
     ? `<span class="badge status-badge ${sc}">${esc(r.status_documentacao)}</span>`
     : '';
 
-  const psicClass = !r.psicossocial        ? 'psico-pendente'
-                  : r.psicossocial.toUpperCase().includes('ENVIADO') ? 'psico-enviado'
-                  : 'psico-outro';
-  const psicLabel = r.psicossocial ? `Psicossocial: ${r.psicossocial}` : 'Psicossocial: pendente';
+  // Visita realizada — coloração
+  let visitaRowClass = '';
+  if (r.visitas_feitas) {
+    const u = r.visitas_feitas.toUpperCase();
+    if (u === 'OK') visitaRowClass = 'row-ok';
+    else if (u.includes('REAG')) visitaRowClass = 'row-reag';
+    else if (u.includes('NÃO') || u.includes('NAO') || u.includes('DESMARC')) visitaRowClass = 'row-nao';
+  }
 
-  // E-mail: múltiplos endereços → mostra o primeiro + "+N"
+  // Psicossocial
+  const psicClass = !r.psicossocial ? 'row-psic-pendente'
+    : r.psicossocial.toUpperCase().includes('ENVIADO') ? 'row-psic-ok'
+    : 'row-psic-outro';
+  const psicLabel = r.psicossocial || 'pendente';
+
+  // E-mail: múltiplos → primeiro + "+N"
   let emailRow = '';
   if (r.email) {
     const emails = r.email.split(/[,;]/).map(e => e.trim()).filter(Boolean);
-    const firstEmail = esc(emails[0]);
     const moreTag = emails.length > 1
-      ? ` <span class="card-email-more">+${emails.length - 1}</span>`
+      ? `<span class="card-email-more">+${emails.length - 1}</span>`
       : '';
-    emailRow = `<span class="card-info-row"><span class="card-icon">&#9993;</span><span class="card-email-text">${firstEmail}</span>${moreTag}</span>`;
+    emailRow = `
+      <div class="card-row">
+        <span class="row-icon">&#9993;</span>
+        <span class="row-text card-email-text">${esc(emails[0])}</span>
+        ${moreTag}
+      </div>`;
   }
-
-  const infoRows = [
-    r.cidade     ? `<span class="card-info-row"><span class="card-icon">&#128205;</span><span class="card-info-text">${esc(r.cidade)}</span></span>` : '',
-    r.visita     ? `<span class="card-info-row"><span class="card-icon">&#128222;</span><span class="card-info-text">${esc(r.visita)}</span></span>` : '',
-    emailRow,
-    r.visitas_feitas
-      ? `<span class="card-info-row ${vc}"><span class="card-icon">&#10003;</span><span class="card-info-text">${esc(r.visitas_feitas)}</span></span>`
-      : '',
-    `<span class="card-info-row ${psicClass}"><span class="card-icon">&#129504;</span><span class="card-info-text">${esc(psicLabel)}</span></span>`,
-  ].filter(Boolean).join('');
 
   const graziTag = r.grazi ? '<span class="card-grazi">Grazi</span>' : '';
   const uberTag  = r.uber && r.uber.trim()
-    ? `<span class="card-uber">${esc(r.uber.trim())}${r.data_pagamento ? ` · Pago: ${esc(r.data_pagamento)}` : ''}</span>`
+    ? `<span class="card-uber">${esc(r.uber.trim())}${r.data_pagamento ? ` · ${esc(r.data_pagamento)}` : ''}</span>`
     : '';
 
   return `
     <div class="card" data-id="${esc(r.id)}" tabindex="0" role="button" aria-label="${esc(r.razao_social)}">
+
       <div class="card-top">
-        <div class="card-left-badges">${topBadges}</div>
+        <div class="card-top-left">${topLeft}</div>
         ${statusBadge}
       </div>
+
       <div class="card-title">${esc(r.razao_social) || '—'}</div>
-      <div class="card-cnpj">${esc(r.cnpj) || ''}${r.grupo ? ` · ${esc(r.grupo)}` : ''}</div>
-      <div class="card-info">${infoRows}</div>
+      <div class="card-cnpj">${esc(r.cnpj) || '—'}${r.grupo ? ` &middot; ${esc(r.grupo)}` : ''}</div>
+
+      <div class="card-rows">
+        ${r.visita ? `<div class="card-row"><span class="row-icon">&#128222;</span><span class="row-text">${esc(r.visita)}</span></div>` : ''}
+        ${emailRow}
+        ${r.visitas_feitas ? `<div class="card-row ${visitaRowClass}"><span class="row-icon">&#10003;</span><span class="row-text">${esc(r.visitas_feitas)}</span></div>` : ''}
+        <div class="card-row ${psicClass}"><span class="row-icon">&#129504;</span><span class="row-text">Psico: ${esc(psicLabel)}</span></div>
+      </div>
+
       <div class="card-footer">
         <span class="card-autor">${esc(r.autor) || ''}${graziTag}</span>
         ${uberTag}
