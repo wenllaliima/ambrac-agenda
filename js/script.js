@@ -9,6 +9,7 @@ let pendentesMode = false;
 let todasMode     = false;
 let parsedRows    = [];
 let _appBound     = false;
+let _isAdmin      = false;
 
 const WEEKDAYS = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
 
@@ -38,10 +39,18 @@ function showLogin() {
   document.getElementById('loginMsg').className = 'login-msg';
 }
 
-function showApp() {
+async function showApp() {
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('datePicker').value = currentDate;
   updateDayLabel();
+
+  // Verifica se o usuário logado é admin
+  const { data: { user } } = await sb.auth.getUser();
+  if (user) {
+    const { data } = await sb.from('admins').select('email').eq('email', user.email).single();
+    _isAdmin = !!data;
+  }
+
   if (!_appBound) { bindEvents(); _appBound = true; }
   loadDay(currentDate);
 }
@@ -363,7 +372,7 @@ function openModal(id) {
     const r = allRecords.find(x => x.id === id);
     if (!r) return;
     document.getElementById('modalTitle').textContent = r.razao_social || 'Editar';
-    del.style.display = 'inline-block';
+    del.style.display = _isAdmin ? 'inline-block' : 'none';
     populateForm(r);
   } else {
     document.getElementById('modalTitle').textContent = 'Nova Empresa';
