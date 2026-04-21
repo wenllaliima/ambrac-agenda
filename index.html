@@ -8,6 +8,25 @@
 </head>
 <body>
 
+  <!-- TELA DE LOGIN -->
+  <div id="loginScreen" class="login-screen" style="display:none">
+    <div class="login-box">
+      <div class="login-brand">
+        <span class="brand-main">AMBRAC</span>
+        <span class="brand-sub">Agenda de Visitas</span>
+      </div>
+      <h2 class="login-title">Acesso por e-mail</h2>
+      <p class="login-desc">Digite seu e-mail cadastrado. Você receberá um link de acesso.</p>
+      <form id="loginForm" novalidate>
+        <div class="login-field">
+          <input type="email" id="loginEmail" placeholder="seu@email.com" autocomplete="email" required>
+        </div>
+        <button type="submit" id="btnLoginSend" class="btn-primary login-btn">Enviar link de acesso</button>
+        <p id="loginMsg" class="login-msg"></p>
+      </form>
+    </div>
+  </div>
+
   <header>
     <div class="header-inner">
       <div class="brand">
@@ -30,6 +49,7 @@
         <button id="btnExport" class="btn-ghost">&#8681; Exportar</button>
         <button id="btnImport" class="btn-ghost">&#8679; Importar</button>
         <button id="btnAdd" class="btn-primary">+ Nova</button>
+        <button id="btnLogout" class="btn-ghost" title="Sair">&#8594; Sair</button>
       </div>
     </div>
   </header>

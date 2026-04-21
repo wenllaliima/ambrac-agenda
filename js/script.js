@@ -8,14 +8,65 @@ let editingId     = null;
 let pendentesMode = false;
 let todasMode     = false;
 let parsedRows    = [];
+let _appBound     = false;
 
 const WEEKDAYS = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
 
-document.addEventListener('DOMContentLoaded', () => {
+// ── AUTH ─────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  // Supabase escuta mudanças de sessão (incluindo retorno do magic link)
+  sb.auth.onAuthStateChange((_event, session) => {
+    if (session) {
+      showApp();
+    } else {
+      showLogin();
+    }
+  });
+
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    showApp();
+  } else {
+    showLogin();
+  }
+});
+
+function showLogin() {
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('loginEmail').value = '';
+  document.getElementById('loginMsg').textContent = '';
+  document.getElementById('loginMsg').className = 'login-msg';
+}
+
+function showApp() {
+  document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('datePicker').value = currentDate;
   updateDayLabel();
-  bindEvents();
+  if (!_appBound) { bindEvents(); _appBound = true; }
   loadDay(currentDate);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('loginForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const email = document.getElementById('loginEmail').value.trim();
+    if (!email) return;
+    const btn = document.getElementById('btnLoginSend');
+    const msg = document.getElementById('loginMsg');
+    btn.textContent = 'Enviando…'; btn.disabled = true;
+    const { error } = await sb.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.href }
+    });
+    btn.textContent = 'Enviar link de acesso'; btn.disabled = false;
+    if (error) {
+      msg.textContent = 'E-mail não autorizado ou erro ao enviar.';
+      msg.className = 'login-msg err';
+    } else {
+      msg.textContent = 'Link enviado! Verifique sua caixa de entrada.';
+      msg.className = 'login-msg ok';
+    }
+  });
 });
 
 function todayISO() { return new Date().toISOString().split('T')[0]; }
@@ -64,6 +115,10 @@ function bindEvents() {
   document.getElementById('btnDelete').addEventListener('click', deleteRecord);
   document.getElementById('form').addEventListener('submit', saveRecord);
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+  document.getElementById('btnLogout').addEventListener('click', async () => {
+    await sb.auth.signOut();
+  });
 
   document.getElementById('btnDash').addEventListener('click', () => {
     if (document.getElementById('dashView').style.display !== 'none') { closeDash(); }
