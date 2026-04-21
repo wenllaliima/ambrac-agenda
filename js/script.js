@@ -524,6 +524,7 @@ async function runImport() {
 
 // ── DASHBOARD ────────────────────────────────────────────────────────────────
 let _dashCharts = [];
+let _datalabelsRegistered = false;
 
 async function openDash() {
   const view = document.getElementById('dashView');
@@ -667,17 +668,25 @@ function renderDash(d) {
 
   document.getElementById('btnCloseDash').addEventListener('click', closeDash);
 
+  if (!_datalabelsRegistered && typeof ChartDataLabels !== 'undefined') {
+    Chart.register(ChartDataLabels);
+    _datalabelsRegistered = true;
+  }
+
   const PALETTE = ['#6366f1','#86efac','#fcd34d','#fca5a5','#93c5fd','#d8b4fe','#fb923c','#34d399','#f472b6','#a3e635'];
   const tickColor = '#8892b0';
   const gridColor = '#2d3150';
 
-  const datalabels = {
+  const donutDatalabels = {
     color: '#fff',
     font: { size: 11, weight: 'bold' },
+    textAlign: 'center',
     formatter: (val, ctx) => {
       const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
-      if (!total || val === 0) return '';
-      return val + '\n' + Math.round(val / total * 100) + '%';
+      if (!total || val === 0) return null;
+      const pct = Math.round(val / total * 100);
+      if (pct < 5) return null; // não mostra em fatias muito pequenas
+      return val + '\n' + pct + '%';
     }
   };
 
@@ -690,17 +699,32 @@ function renderDash(d) {
       },
       options: {
         responsive: true,
-        cutout: '55%',
+        cutout: '45%',
         plugins: {
           legend: { labels: { color: tickColor, font: { size: 11 }, boxWidth: 12 } },
-          tooltip: {
-            callbacks: {
-              label: ctx => {
-                const total = ctx.dataset.data.reduce((a,b)=>a+b,0);
-                return ` ${ctx.label}: ${ctx.raw} (${Math.round(ctx.raw/total*100)}%)`;
-              }
-            }
-          }
+          tooltip: { callbacks: { label: ctx => {
+            const total = ctx.dataset.data.reduce((a,b)=>a+b,0);
+            return ` ${ctx.label}: ${ctx.raw} (${Math.round(ctx.raw/total*100)}%)`;
+          }}},
+          datalabels: donutDatalabels
+        }
+      }
+    });
+  }
+
+  function donutFixed(id, labels, data, colors) {
+    return new Chart(document.getElementById(id), {
+      type: 'doughnut',
+      data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0 }] },
+      options: {
+        responsive: true, cutout: '45%',
+        plugins: {
+          legend: { labels: { color: tickColor, font: { size: 11 }, boxWidth: 12 } },
+          tooltip: { callbacks: { label: ctx => {
+            const total = ctx.dataset.data.reduce((a,b)=>a+b,0);
+            return ` ${ctx.label}: ${ctx.raw} (${Math.round(ctx.raw/total*100)}%)`;
+          }}},
+          datalabels: donutDatalabels
         }
       }
     });
@@ -708,43 +732,17 @@ function renderDash(d) {
 
   _dashCharts.push(donut('cStatus', Object.entries(byStatus).sort((a,b)=>b[1]-a[1])));
 
-  _dashCharts.push(new Chart(document.getElementById('cVisitas'), {
-    type: 'doughnut',
-    data: {
-      labels: ['OK', 'Reagendado', 'Não feita', 'Sem info'],
-      datasets: [{ data: [visitasOK, visitasReag, visitasNao, visitasSem],
-        backgroundColor: ['#86efac','#fcd34d','#fca5a5','#374151'], borderWidth: 0 }]
-    },
-    options: {
-      responsive: true, cutout: '55%',
-      plugins: {
-        legend: { labels: { color: tickColor, font: { size: 11 }, boxWidth: 12 } },
-        tooltip: { callbacks: { label: ctx => {
-          const total = ctx.dataset.data.reduce((a,b)=>a+b,0);
-          return ` ${ctx.label}: ${ctx.raw} (${Math.round(ctx.raw/total*100)}%)`;
-        }}}
-      }
-    }
-  }));
+  _dashCharts.push(donutFixed('cVisitas',
+    ['OK', 'Reagendado', 'Não feita', 'Sem info'],
+    [visitasOK, visitasReag, visitasNao, visitasSem],
+    ['#86efac','#fcd34d','#fca5a5','#374151']
+  ));
 
-  _dashCharts.push(new Chart(document.getElementById('cPsico'), {
-    type: 'doughnut',
-    data: {
-      labels: ['Enviado', 'Pendente', 'Outro'],
-      datasets: [{ data: [psicEnviado, psicPendente, psicOutro],
-        backgroundColor: ['#86efac','#fcd34d','#93c5fd'], borderWidth: 0 }]
-    },
-    options: {
-      responsive: true, cutout: '55%',
-      plugins: {
-        legend: { labels: { color: tickColor, font: { size: 11 }, boxWidth: 12 } },
-        tooltip: { callbacks: { label: ctx => {
-          const total = ctx.dataset.data.reduce((a,b)=>a+b,0);
-          return ` ${ctx.label}: ${ctx.raw} (${Math.round(ctx.raw/total*100)}%)`;
-        }}}
-      }
-    }
-  }));
+  _dashCharts.push(donutFixed('cPsico',
+    ['Enviado', 'Pendente', 'Outro'],
+    [psicEnviado, psicPendente, psicOutro],
+    ['#86efac','#fcd34d','#93c5fd']
+  ));
 
   _dashCharts.push(donut('cCateg',    Object.entries(byCateg).sort((a,b)=>b[1]-a[1])));
   _dashCharts.push(donut('cContrato', Object.entries(byContrato).sort((a,b)=>b[1]-a[1])));
@@ -759,7 +757,12 @@ function renderDash(d) {
       responsive: true, indexAxis: 'y',
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: ctx => ` ${ctx.raw} empresa${ctx.raw !== 1 ? 's' : ''}` } }
+        tooltip: { callbacks: { label: ctx => ` ${ctx.raw} empresa${ctx.raw !== 1 ? 's' : ''}` } },
+        datalabels: {
+          color: '#e2e8f0', font: { size: 11, weight: 'bold' },
+          anchor: 'end', align: 'end',
+          formatter: v => v
+        }
       },
       scales: {
         x: { ticks: { color: tickColor, precision: 0 }, grid: { color: gridColor } },
@@ -778,7 +781,12 @@ function renderDash(d) {
       responsive: true,
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: ctx => ` R$ ${ctx.raw.toFixed(2).replace('.',',')}` } }
+        tooltip: { callbacks: { label: ctx => ` R$ ${ctx.raw.toFixed(2).replace('.',',')}` } },
+        datalabels: {
+          color: '#1a1d2e', font: { size: 10, weight: 'bold' },
+          anchor: 'end', align: 'end',
+          formatter: v => 'R$' + v.toFixed(0)
+        }
       },
       scales: {
         x: { ticks: { color: tickColor, font: { size: 10 } }, grid: { display: false } },
