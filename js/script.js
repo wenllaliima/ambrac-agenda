@@ -65,6 +65,11 @@ function bindEvents() {
   document.getElementById('form').addEventListener('submit', saveRecord);
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
+  document.getElementById('btnDash').addEventListener('click', () => {
+    if (document.getElementById('dashView').style.display !== 'none') { closeDash(); }
+    else { openDash(); }
+  });
+  document.getElementById('btnExport').addEventListener('click', exportXLSX);
   document.getElementById('btnImport').addEventListener('click', openImport);
   document.getElementById('importClose').addEventListener('click', closeImport);
   document.getElementById('importOverlay').addEventListener('click', closeImport);
@@ -515,6 +520,207 @@ async function runImport() {
     ? `${inserted} registros importados com sucesso.`
     : `${inserted} importados · ${errors} com erro.`;
   loadDay(currentDate);
+}
+
+// ── DASHBOARD ────────────────────────────────────────────────────────────────
+let _dashCharts = [];
+
+async function openDash() {
+  const view = document.getElementById('dashView');
+  view.style.display = 'block';
+  document.getElementById('main').style.display = 'none';
+  document.getElementById('btnDash').classList.add('btn-active');
+  view.innerHTML = '<div class="state-msg">Carregando dados…</div>';
+  const { data, error } = await sb.from('agendamentos').select('*');
+  if (error) { view.innerHTML = '<div class="state-msg">Erro ao carregar dados.</div>'; return; }
+  renderDash(data || []);
+}
+
+function closeDash() {
+  document.getElementById('dashView').style.display = 'none';
+  document.getElementById('main').style.display = 'block';
+  document.getElementById('btnDash').classList.remove('btn-active');
+  _dashCharts.forEach(c => c.destroy());
+  _dashCharts = [];
+}
+
+function countBy(arr, key) {
+  return arr.reduce((acc, r) => {
+    const v = r[key] || '(sem dado)';
+    acc[v] = (acc[v] || 0) + 1;
+    return acc;
+  }, {});
+}
+
+function renderDash(d) {
+  const totalEmpresas = d.length;
+  const uberTotal = d.reduce((acc, r) => {
+    if (!r.uber) return acc;
+    const m = r.uber.replace(/\s/g,'').match(/\d+[,.]\d{2}/);
+    if (m) { const v = parseFloat(m[0].replace(',','.')); if (!isNaN(v)) acc += v; }
+    return acc;
+  }, 0);
+  const visitasOK = d.filter(r => r.visitas_feitas && r.visitas_feitas.toUpperCase() === 'OK').length;
+  const docsOK    = d.filter(r => r.status_documentacao && ['ENVIADO','VÁLIDA'].includes(r.status_documentacao)).length;
+
+  const byStatus    = countBy(d, 'status_documentacao');
+  const byCateg     = countBy(d, 'categoria');
+  const byContrato  = countBy(d, 'tipo_contrato');
+  const byCidade    = countBy(d, 'cidade');
+  const topCidades  = Object.entries(byCidade).filter(e => e[0] !== '(sem dado)').sort((a,b)=>b[1]-a[1]).slice(0,10);
+
+  const uberByDate = {};
+  d.forEach(r => {
+    if (!r.data_visita || !r.uber) return;
+    const m = r.uber.replace(/\s/g,'').match(/\d+[,.]\d{2}/);
+    if (!m) return;
+    const v = parseFloat(m[0].replace(',','.'));
+    if (!isNaN(v)) uberByDate[r.data_visita] = (uberByDate[r.data_visita] || 0) + v;
+  });
+  const uberDates = Object.keys(uberByDate).sort();
+
+  const view = document.getElementById('dashView');
+  view.innerHTML = `
+    <div class="dash-header">
+      <h2 class="dash-title">Dashboard</h2>
+      <button id="btnCloseDash" class="btn-ghost">&#8592; Voltar</button>
+    </div>
+    <div class="dash-kpis">
+      <div class="dash-kpi">
+        <div class="kpi-label">Total de Empresas</div>
+        <div class="kpi-value">${totalEmpresas}</div>
+      </div>
+      <div class="dash-kpi">
+        <div class="kpi-label">Total Uber</div>
+        <div class="kpi-value kpi-green">R$&nbsp;${uberTotal.toFixed(2).replace('.',',')}</div>
+      </div>
+      <div class="dash-kpi">
+        <div class="kpi-label">Visitas Realizadas</div>
+        <div class="kpi-value kpi-blue">${visitasOK}</div>
+        <div class="kpi-sub">${totalEmpresas ? Math.round(visitasOK/totalEmpresas*100) : 0}% do total</div>
+      </div>
+      <div class="dash-kpi">
+        <div class="kpi-label">Docs OK / Enviadas</div>
+        <div class="kpi-value kpi-yellow">${docsOK}</div>
+        <div class="kpi-sub">${totalEmpresas ? Math.round(docsOK/totalEmpresas*100) : 0}% do total</div>
+      </div>
+    </div>
+    <div class="dash-charts">
+      <div class="dash-chart-box">
+        <div class="chart-title">Status da Documentação</div>
+        <canvas id="cStatus"></canvas>
+      </div>
+      <div class="dash-chart-box">
+        <div class="chart-title">Categoria</div>
+        <canvas id="cCateg"></canvas>
+      </div>
+      <div class="dash-chart-box">
+        <div class="chart-title">Tipo de Contrato</div>
+        <canvas id="cContrato"></canvas>
+      </div>
+      <div class="dash-chart-box">
+        <div class="chart-title">Top Cidades</div>
+        <canvas id="cCidades"></canvas>
+      </div>
+      <div class="dash-chart-box dash-chart-wide">
+        <div class="chart-title">Uber por Data de Visita (R$)</div>
+        <canvas id="cUber"></canvas>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('btnCloseDash').addEventListener('click', closeDash);
+
+  const PALETTE = ['#6366f1','#86efac','#fcd34d','#fca5a5','#93c5fd','#d8b4fe','#fb923c','#34d399','#f472b6','#a3e635'];
+  const tickColor = '#8892b0';
+  const gridColor = '#2d3150';
+  const baseOpts  = { responsive: true, plugins: { legend: { labels: { color: tickColor, font: { size: 11 }, boxWidth: 12 } } } };
+
+  function donut(id, entries) {
+    return new Chart(document.getElementById(id), {
+      type: 'doughnut',
+      data: {
+        labels: entries.map(e => e[0]),
+        datasets: [{ data: entries.map(e => e[1]), backgroundColor: PALETTE, borderWidth: 0 }]
+      },
+      options: { ...baseOpts, cutout: '60%' }
+    });
+  }
+
+  _dashCharts.push(donut('cStatus',   Object.entries(byStatus).sort((a,b)=>b[1]-a[1])));
+  _dashCharts.push(donut('cCateg',    Object.entries(byCateg).sort((a,b)=>b[1]-a[1])));
+  _dashCharts.push(donut('cContrato', Object.entries(byContrato).sort((a,b)=>b[1]-a[1])));
+
+  _dashCharts.push(new Chart(document.getElementById('cCidades'), {
+    type: 'bar',
+    data: {
+      labels: topCidades.map(e => e[0]),
+      datasets: [{ data: topCidades.map(e => e[1]), backgroundColor: '#6366f1', borderRadius: 5 }]
+    },
+    options: {
+      ...baseOpts, indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: tickColor }, grid: { color: gridColor } },
+        y: { ticks: { color: '#e2e8f0', font: { size: 11 } }, grid: { display: false } }
+      }
+    }
+  }));
+
+  _dashCharts.push(new Chart(document.getElementById('cUber'), {
+    type: 'bar',
+    data: {
+      labels: uberDates.map(dt => dt.split('-').reverse().join('/')),
+      datasets: [{ label: 'Uber (R$)', data: uberDates.map(dt => uberByDate[dt]), backgroundColor: '#86efac', borderRadius: 4 }]
+    },
+    options: {
+      ...baseOpts,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: tickColor, font: { size: 10 } }, grid: { display: false } },
+        y: { ticks: { color: tickColor, callback: v => 'R$ ' + v.toFixed(0) }, grid: { color: gridColor } }
+      }
+    }
+  }));
+}
+
+// ── EXPORTAR XLSX ─────────────────────────────────────────────────────────────
+async function exportXLSX() {
+  const btn = document.getElementById('btnExport');
+  btn.textContent = 'Exportando…'; btn.disabled = true;
+  const { data, error } = await sb.from('agendamentos').select('*')
+    .order('data_visita', { ascending: true })
+    .order('ordem', { nullsFirst: false });
+  btn.textContent = '↓ Exportar'; btn.disabled = false;
+  if (error || !data) { alert('Erro ao exportar:\n' + (error ? error.message : 'sem dados')); return; }
+
+  const COLS = [
+    ['data_visita','Data Visita'], ['ordem','Ordem'], ['categoria','Categoria'],
+    ['classificacao','Classificação'], ['cnpj','CNPJ'], ['grupo','Grupo'],
+    ['razao_social','Razão Social'], ['unidade','Unidade'],
+    ['tipo_contrato','Tipo Contrato'], ['data_contrato','Data Contrato'],
+    ['servicos_contrato','Serviços Contrato'], ['planilha_empresa','Planilha Empresa'],
+    ['comercial_responsavel','Comercial Responsável'], ['data_documentacao','Data Documentação'],
+    ['visitas_feitas','Visitas Feitas'], ['psicossocial','Psicossocial'],
+    ['status_documentacao','Status Documentação'], ['responsavel_documentacao','Resp. Documentação'],
+    ['visita','Informações Visita'], ['cidade','Cidade'], ['endereco','Endereço'],
+    ['email','E-mail'], ['telefone','Telefone'], ['uber','Uber'],
+    ['data_pagamento','Data Pagamento Uber'], ['grazi','Grazi'],
+    ['autor','Autor'], ['atualizado_por','Atualizado Por'], ['atualizado_em','Atualizado Em'],
+  ];
+
+  const headers = COLS.map(c => c[1]);
+  const rows = data.map(r => COLS.map(([k]) => {
+    if (k === 'grazi') return r[k] ? 'Sim' : 'Não';
+    if (k === 'atualizado_em' && r[k]) return r[k].replace('T',' ').slice(0,19);
+    return r[k] ?? '';
+  }));
+
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  ws['!cols'] = COLS.map(() => ({ wch: 22 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Agendamentos');
+  XLSX.writeFile(wb, `ambrac_agenda_${new Date().toISOString().split('T')[0]}.xlsx`);
 }
 
 // ── FILL FORM FROM CSV ───────────────────────────────────────────────────────

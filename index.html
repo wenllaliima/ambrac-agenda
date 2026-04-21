@@ -26,6 +26,8 @@
         <span id="countBadge" class="count-badge"></span>
         <button id="btnPendentes" class="btn-ghost">&#9676; Pendentes</button>
         <button id="btnTodas" class="btn-ghost">&#9776; Ver Todas</button>
+        <button id="btnDash" class="btn-ghost">&#9783; Dashboard</button>
+        <button id="btnExport" class="btn-ghost">&#8681; Exportar</button>
         <button id="btnImport" class="btn-ghost">&#8679; Importar</button>
         <button id="btnAdd" class="btn-primary">+ Nova</button>
       </div>
@@ -61,6 +63,8 @@
     <button id="btnClearFilters" class="btn-ghost">&#10005; Limpar</button>
     <span id="uberTotal" class="uber-total"></span>
   </div>
+
+  <div id="dashView" class="dash-view" style="display:none"></div>
 
   <main id="main">
     <div id="loading" class="state-msg">Carregando…</div>
@@ -260,6 +264,8 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="js/script.js"></script>
   <script>document.addEventListener('DOMContentLoaded',()=>{const v=document.createElement('div');v.style.cssText='position:fixed;bottom:8px;right:10px;background:#6366f1;color:#fff;font-size:11px;padding:3px 8px;border-radius:4px;z-index:9999;opacity:.8';v.textContent='v2026-04-16';document.body.appendChild(v);});</script>
 </body>
