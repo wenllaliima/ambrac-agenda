@@ -554,30 +554,50 @@ function countBy(arr, key) {
 
 function renderDash(d) {
   const totalEmpresas = d.length;
+
+  // Uber
   const uberTotal = d.reduce((acc, r) => {
     if (!r.uber) return acc;
-    const m = r.uber.replace(/\s/g,'').match(/\d+[,.]\d{2}/);
+    const m = r.uber.replace(/\s/g,'').match(/[\d]+[,.][\d]{2}/);
     if (m) { const v = parseFloat(m[0].replace(',','.')); if (!isNaN(v)) acc += v; }
     return acc;
   }, 0);
-  const visitasOK = d.filter(r => r.visitas_feitas && r.visitas_feitas.toUpperCase() === 'OK').length;
-  const docsOK    = d.filter(r => r.status_documentacao && ['ENVIADO','VÁLIDA'].includes(r.status_documentacao)).length;
+  const comUber = d.filter(r => r.uber && r.uber.trim()).length;
+  const semUber = totalEmpresas - comUber;
 
-  const byStatus    = countBy(d, 'status_documentacao');
-  const byCateg     = countBy(d, 'categoria');
-  const byContrato  = countBy(d, 'tipo_contrato');
-  const byCidade    = countBy(d, 'cidade');
-  const topCidades  = Object.entries(byCidade).filter(e => e[0] !== '(sem dado)').sort((a,b)=>b[1]-a[1]).slice(0,10);
+  // Visitas
+  const visitasOK   = d.filter(r => r.visitas_feitas && r.visitas_feitas.toUpperCase() === 'OK').length;
+  const visitasReag = d.filter(r => r.visitas_feitas && r.visitas_feitas.toUpperCase().includes('REAG')).length;
+  const visitasNao  = d.filter(r => r.visitas_feitas && (r.visitas_feitas.toUpperCase().includes('NÃO') || r.visitas_feitas.toUpperCase().includes('NAO'))).length;
+  const visitasSem  = totalEmpresas - visitasOK - visitasReag - visitasNao;
+
+  // Documentação
+  const docsOK     = d.filter(r => r.status_documentacao && ['ENVIADO','VÁLIDA'].includes(r.status_documentacao)).length;
+  const docsVencid = d.filter(r => r.status_documentacao === 'VENCIDA').length;
+  const docsNova   = d.filter(r => r.status_documentacao === 'NOVA EMPRESA').length;
+
+  // Psicossocial
+  const psicEnviado  = d.filter(r => r.psicossocial && r.psicossocial.toUpperCase().includes('ENVIADO')).length;
+  const psicPendente = d.filter(r => !r.psicossocial || r.psicossocial.trim() === '').length;
+  const psicOutro    = totalEmpresas - psicEnviado - psicPendente;
+
+  const byStatus   = countBy(d, 'status_documentacao');
+  const byCateg    = countBy(d, 'categoria');
+  const byContrato = countBy(d, 'tipo_contrato');
+  const byCidade   = countBy(d, 'cidade');
+  const topCidades = Object.entries(byCidade).filter(e => e[0] !== '(sem dado)').sort((a,b)=>b[1]-a[1]).slice(0,10);
 
   const uberByDate = {};
   d.forEach(r => {
     if (!r.data_visita || !r.uber) return;
-    const m = r.uber.replace(/\s/g,'').match(/\d+[,.]\d{2}/);
+    const m = r.uber.replace(/\s/g,'').match(/[\d]+[,.][\d]{2}/);
     if (!m) return;
     const v = parseFloat(m[0].replace(',','.'));
     if (!isNaN(v)) uberByDate[r.data_visita] = (uberByDate[r.data_visita] || 0) + v;
   });
   const uberDates = Object.keys(uberByDate).sort();
+
+  function pct(n) { return totalEmpresas ? Math.round(n / totalEmpresas * 100) : 0; }
 
   const view = document.getElementById('dashView');
   view.innerHTML = `
@@ -585,6 +605,7 @@ function renderDash(d) {
       <h2 class="dash-title">Dashboard</h2>
       <button id="btnCloseDash" class="btn-ghost">&#8592; Voltar</button>
     </div>
+
     <div class="dash-kpis">
       <div class="dash-kpi">
         <div class="kpi-label">Total de Empresas</div>
@@ -593,22 +614,37 @@ function renderDash(d) {
       <div class="dash-kpi">
         <div class="kpi-label">Total Uber</div>
         <div class="kpi-value kpi-green">R$&nbsp;${uberTotal.toFixed(2).replace('.',',')}</div>
+        <div class="kpi-sub">${comUber} empresas · ${semUber} sem valor</div>
       </div>
       <div class="dash-kpi">
-        <div class="kpi-label">Visitas Realizadas</div>
+        <div class="kpi-label">Visitas Realizadas (OK)</div>
         <div class="kpi-value kpi-blue">${visitasOK}</div>
-        <div class="kpi-sub">${totalEmpresas ? Math.round(visitasOK/totalEmpresas*100) : 0}% do total</div>
+        <div class="kpi-sub">${pct(visitasOK)}% · Reagendado: ${visitasReag} · Não feita: ${visitasNao}</div>
       </div>
       <div class="dash-kpi">
-        <div class="kpi-label">Docs OK / Enviadas</div>
+        <div class="kpi-label">Docs Enviadas / Válidas</div>
         <div class="kpi-value kpi-yellow">${docsOK}</div>
-        <div class="kpi-sub">${totalEmpresas ? Math.round(docsOK/totalEmpresas*100) : 0}% do total</div>
+        <div class="kpi-sub">${pct(docsOK)}% · Vencida: ${docsVencid} · Nova: ${docsNova}</div>
+      </div>
+      <div class="dash-kpi">
+        <div class="kpi-label">Psicossocial Enviado</div>
+        <div class="kpi-value kpi-green">${psicEnviado}</div>
+        <div class="kpi-sub">${pct(psicEnviado)}% · Pendente: ${psicPendente} · Outro: ${psicOutro}</div>
       </div>
     </div>
+
     <div class="dash-charts">
       <div class="dash-chart-box">
         <div class="chart-title">Status da Documentação</div>
         <canvas id="cStatus"></canvas>
+      </div>
+      <div class="dash-chart-box">
+        <div class="chart-title">Visitas Realizadas</div>
+        <canvas id="cVisitas"></canvas>
+      </div>
+      <div class="dash-chart-box">
+        <div class="chart-title">Psicossocial</div>
+        <canvas id="cPsico"></canvas>
       </div>
       <div class="dash-chart-box">
         <div class="chart-title">Categoria</div>
@@ -634,7 +670,16 @@ function renderDash(d) {
   const PALETTE = ['#6366f1','#86efac','#fcd34d','#fca5a5','#93c5fd','#d8b4fe','#fb923c','#34d399','#f472b6','#a3e635'];
   const tickColor = '#8892b0';
   const gridColor = '#2d3150';
-  const baseOpts  = { responsive: true, plugins: { legend: { labels: { color: tickColor, font: { size: 11 }, boxWidth: 12 } } } };
+
+  const datalabels = {
+    color: '#fff',
+    font: { size: 11, weight: 'bold' },
+    formatter: (val, ctx) => {
+      const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+      if (!total || val === 0) return '';
+      return val + '\n' + Math.round(val / total * 100) + '%';
+    }
+  };
 
   function donut(id, entries) {
     return new Chart(document.getElementById(id), {
@@ -643,11 +688,64 @@ function renderDash(d) {
         labels: entries.map(e => e[0]),
         datasets: [{ data: entries.map(e => e[1]), backgroundColor: PALETTE, borderWidth: 0 }]
       },
-      options: { ...baseOpts, cutout: '60%' }
+      options: {
+        responsive: true,
+        cutout: '55%',
+        plugins: {
+          legend: { labels: { color: tickColor, font: { size: 11 }, boxWidth: 12 } },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const total = ctx.dataset.data.reduce((a,b)=>a+b,0);
+                return ` ${ctx.label}: ${ctx.raw} (${Math.round(ctx.raw/total*100)}%)`;
+              }
+            }
+          }
+        }
+      }
     });
   }
 
-  _dashCharts.push(donut('cStatus',   Object.entries(byStatus).sort((a,b)=>b[1]-a[1])));
+  _dashCharts.push(donut('cStatus', Object.entries(byStatus).sort((a,b)=>b[1]-a[1])));
+
+  _dashCharts.push(new Chart(document.getElementById('cVisitas'), {
+    type: 'doughnut',
+    data: {
+      labels: ['OK', 'Reagendado', 'Não feita', 'Sem info'],
+      datasets: [{ data: [visitasOK, visitasReag, visitasNao, visitasSem],
+        backgroundColor: ['#86efac','#fcd34d','#fca5a5','#374151'], borderWidth: 0 }]
+    },
+    options: {
+      responsive: true, cutout: '55%',
+      plugins: {
+        legend: { labels: { color: tickColor, font: { size: 11 }, boxWidth: 12 } },
+        tooltip: { callbacks: { label: ctx => {
+          const total = ctx.dataset.data.reduce((a,b)=>a+b,0);
+          return ` ${ctx.label}: ${ctx.raw} (${Math.round(ctx.raw/total*100)}%)`;
+        }}}
+      }
+    }
+  }));
+
+  _dashCharts.push(new Chart(document.getElementById('cPsico'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Enviado', 'Pendente', 'Outro'],
+      datasets: [{ data: [psicEnviado, psicPendente, psicOutro],
+        backgroundColor: ['#86efac','#fcd34d','#93c5fd'], borderWidth: 0 }]
+    },
+    options: {
+      responsive: true, cutout: '55%',
+      plugins: {
+        legend: { labels: { color: tickColor, font: { size: 11 }, boxWidth: 12 } },
+        tooltip: { callbacks: { label: ctx => {
+          const total = ctx.dataset.data.reduce((a,b)=>a+b,0);
+          return ` ${ctx.label}: ${ctx.raw} (${Math.round(ctx.raw/total*100)}%)`;
+        }}}
+      }
+    }
+  }));
+
   _dashCharts.push(donut('cCateg',    Object.entries(byCateg).sort((a,b)=>b[1]-a[1])));
   _dashCharts.push(donut('cContrato', Object.entries(byContrato).sort((a,b)=>b[1]-a[1])));
 
@@ -658,10 +756,13 @@ function renderDash(d) {
       datasets: [{ data: topCidades.map(e => e[1]), backgroundColor: '#6366f1', borderRadius: 5 }]
     },
     options: {
-      ...baseOpts, indexAxis: 'y',
-      plugins: { legend: { display: false } },
+      responsive: true, indexAxis: 'y',
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.raw} empresa${ctx.raw !== 1 ? 's' : ''}` } }
+      },
       scales: {
-        x: { ticks: { color: tickColor }, grid: { color: gridColor } },
+        x: { ticks: { color: tickColor, precision: 0 }, grid: { color: gridColor } },
         y: { ticks: { color: '#e2e8f0', font: { size: 11 } }, grid: { display: false } }
       }
     }
@@ -674,8 +775,11 @@ function renderDash(d) {
       datasets: [{ label: 'Uber (R$)', data: uberDates.map(dt => uberByDate[dt]), backgroundColor: '#86efac', borderRadius: 4 }]
     },
     options: {
-      ...baseOpts,
-      plugins: { legend: { display: false } },
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ` R$ ${ctx.raw.toFixed(2).replace('.',',')}` } }
+      },
       scales: {
         x: { ticks: { color: tickColor, font: { size: 10 } }, grid: { display: false } },
         y: { ticks: { color: tickColor, callback: v => 'R$ ' + v.toFixed(0) }, grid: { color: gridColor } }
