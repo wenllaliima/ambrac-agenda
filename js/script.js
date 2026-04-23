@@ -7,76 +7,51 @@ let allRecords    = [];
 let editingId     = null;
 let pendentesMode = false;
 let todasMode     = false;
-let parsedRows    = [];
-let _appBound     = false;
-let _isAdmin      = false;
+let parsedRows = [];
+let _isAdmin   = false;
 
 const WEEKDAYS = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
 
-// ── AUTH ─────────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', async () => {
-  // Supabase escuta mudanças de sessão (incluindo retorno do magic link)
-  sb.auth.onAuthStateChange((_event, session) => {
-    if (session) {
-      showApp();
-    } else {
-      showLogin();
-    }
-  });
-
-  const { data: { session } } = await sb.auth.getSession();
-  if (session) {
-    showApp();
-  } else {
-    showLogin();
-  }
-});
-
-function showLogin() {
-  document.getElementById('loginScreen').style.display = 'flex';
-  document.getElementById('loginEmail').value = '';
-  document.getElementById('loginMsg').textContent = '';
-  document.getElementById('loginMsg').className = 'login-msg';
-}
-
-async function showApp() {
-  document.getElementById('loginScreen').style.display = 'none';
+// ── INIT ─────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('datePicker').value = currentDate;
   updateDayLabel();
-
-  // Verifica se o usuário logado é admin
-  const { data: { user } } = await sb.auth.getUser();
-  if (user) {
-    const { data } = await sb.from('admins').select('email').eq('email', user.email).single();
-    _isAdmin = !!data;
-  }
-
-  if (!_appBound) { bindEvents(); _appBound = true; }
+  bindEvents();
   loadDay(currentDate);
-}
+});
+
+// ── ADMIN MODE ───────────────────────────────────────────────────────────────
+let _adminClicks = 0;
+let _adminTimer  = null;
 
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('loginForm').addEventListener('submit', async e => {
-    e.preventDefault();
-    const email = document.getElementById('loginEmail').value.trim();
-    if (!email) return;
-    const btn = document.getElementById('btnLoginSend');
-    const msg = document.getElementById('loginMsg');
-    btn.textContent = 'Enviando…'; btn.disabled = true;
-    const { error } = await sb.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: window.location.href }
-    });
-    btn.textContent = 'Enviar link de acesso'; btn.disabled = false;
-    if (error) {
-      msg.textContent = 'E-mail não autorizado ou erro ao enviar.';
-      msg.className = 'login-msg err';
-    } else {
-      msg.textContent = 'Link enviado! Verifique sua caixa de entrada.';
-      msg.className = 'login-msg ok';
+  document.getElementById('brandAdmin').addEventListener('click', () => {
+    _adminClicks++;
+    clearTimeout(_adminTimer);
+    _adminTimer = setTimeout(() => { _adminClicks = 0; }, 1500);
+    if (_adminClicks >= 3) {
+      _adminClicks = 0;
+      activateAdminMode();
     }
   });
 });
+
+async function activateAdminMode() {
+  if (_isAdmin) {
+    _isAdmin = false;
+    document.getElementById('adminDot').style.opacity = '0';
+    return;
+  }
+  const email = prompt('E-mail de administrador:');
+  if (!email) return;
+  const { data } = await sb.from('admins').select('email').eq('email', email.trim().toLowerCase()).single();
+  if (data) {
+    _isAdmin = true;
+    document.getElementById('adminDot').style.opacity = '1';
+  } else {
+    alert('E-mail não autorizado.');
+  }
+}
 
 function todayISO() { return new Date().toISOString().split('T')[0]; }
 
@@ -124,10 +99,6 @@ function bindEvents() {
   document.getElementById('btnDelete').addEventListener('click', deleteRecord);
   document.getElementById('form').addEventListener('submit', saveRecord);
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
-
-  document.getElementById('btnLogout').addEventListener('click', async () => {
-    await sb.auth.signOut();
-  });
 
   document.getElementById('btnDash').addEventListener('click', () => {
     if (document.getElementById('dashView').style.display !== 'none') { closeDash(); }
